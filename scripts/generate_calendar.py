@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate earnings-calendar ICS + a beautiful index.html
-- US stocks via Finnhub (+ yfinance fallback)
+- US stocks via Finnhub (+ yfinance fallback) with Chinese Name support
 - A-shares via AKShare
 """
 
@@ -28,6 +28,62 @@ TO = (TODAY + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
 RAW_ICS_URL = "https://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics"
 WEBCAL_URL = "webcal://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics"
 
+# 常见美股中文名映射字典（优先级：watchlist.txt 内部指定 > 本字典 > 纯代码缩写）
+US_NAMES = {
+    # 科技巨头 & 知名美股
+    "AAPL": "苹果",
+    "NVDA": "英伟达",
+    "MSFT": "微软",
+    "GOOGL": "谷歌",
+    "GOOG": "谷歌",
+    "AMZN": "亚马逊",
+    "META": "Meta",
+    "TSLA": "特斯拉",
+    "NFLX": "奈飞",
+    "AMD": "超威半导体",
+    "INTC": "英特尔",
+    "AVGO": "博通",
+    "QCOM": "高通",
+    "MU": "美光科技",
+    "ARM": "ARM",
+    "TSM": "台积电",
+    "ASML": "阿斯麦",
+    "ORCL": "甲骨文",
+    "CRM": "赛富时",
+    "PLTR": "Palantir",
+    "COIN": "Coinbase",
+    "DIS": "迪士尼",
+    "NKE": "耐克",
+    "SBUX": "星巴克",
+    "MCD": "麦当劳",
+    "KO": "可口可乐",
+    "PEP": "百事可乐",
+    "BA": "波音",
+    "PANW": "帕洛阿尔托网络",
+    "SNOW": "Snowflake",
+    "SMCI": "超微电脑",
+
+    # 热门中概股
+    "BABA": "阿里巴巴",
+    "PDD": "拼多多",
+    "JD": "京东",
+    "BIDU": "百度",
+    "TCEHY": "腾讯控股",
+    "NTES": "网易",
+    "BILI": "哔哩哔哩",
+    "NIO": "蔚来汽车",
+    "XPEV": "小鹏汽车",
+    "LI": "理想汽车",
+    "TME": "腾讯音乐",
+    "IQ": "爱奇艺",
+    "EDU": "新东方",
+    "TAL": "好未来",
+    "YUMC": "百胜中国",
+    "FUTU": "富途控股",
+    "TIGR": "老虎证券",
+    "LKNCY": "瑞幸咖啡",
+}
+
 def get_cn_periods() -> list[str]:
     """获取合法标准的 AKShare 报表 period 格式字符串"""
     year = TODAY.year
@@ -49,6 +105,7 @@ def get_cn_periods() -> list[str]:
     return periods
 
 def load_watchlist() -> set[str]:
+    """加载美股 Watchlist，并支持通过注释扩展美股中文名（如 `AAPL # 苹果`）"""
     if not WATCHLIST_FILE.exists():
         print(f"⚠️ Watchlist file not found: {WATCHLIST_FILE}")
         return set()
@@ -56,8 +113,20 @@ def load_watchlist() -> set[str]:
     with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith("#"):
-                symbols.add(line.upper())
+            if not line:
+                continue
+            if line.startswith("#"):
+                continue
+            
+            # 支持同行带注释语法: AAPL # 苹果
+            parts = line.split("#", 1)
+            symbol = parts[0].strip().upper()
+            if symbol:
+                symbols.add(symbol)
+                if len(parts) > 1:
+                    cn_alias = parts[1].strip()
+                    if cn_alias:
+                        US_NAMES[symbol] = cn_alias
     return symbols
 
 def load_watchlist_cn() -> set[str]:
@@ -251,24 +320,30 @@ def fold_ics_line(line: str, width: int = 75) -> list[str]:
     return folded
 
 def to_event_lines(item: dict, dtstamp: str) -> list[str]:
-    symbol = item.get("symbol", "UNKNOWN")
+    symbol = item.get("symbol", "UNKNOWN").upper()
+    cn_name = US_NAMES.get(symbol, "")
+    display_name = f"{cn_name} ({symbol})" if cn_name else symbol
+
     event_date = datetime.fromisoformat(item["date"]).date()
     end_date = event_date + timedelta(days=1)
     uid = f"{symbol}-{event_date.isoformat()}@earning-calendar-ics"
     hour = item.get("hour", "")
     hour_map = {"bmo": "盘前", "amc": "盘后", "": ""}
     timing = hour_map.get(hour, "")
-    summary = f"{symbol} Earnings"
+    
+    summary = f"{display_name} 财报"
     if timing:
-        summary = f"{symbol} Earnings ({timing})"
+        summary = f"{display_name} 财报 ({timing})"
+        
     source_label = "yfinance" if item.get("source") == "yf" else "Finnhub (non-GAAP)"
     description = "\n".join([
-        f"Ticker: {symbol}",
-        f"Fiscal Qtr: {item.get('quarter', '-')}",
-        f"Timing: {timing if timing else '未指定'}",
-        f"Estimate EPS: {item.get('epsEstimate') if item.get('epsEstimate') is not None else '-'}",
-        f"Est. Revenue: {fmt_number(item.get('revenueEstimate'))}",
-        f"Source: {source_label}",
+        f"公司名称: {cn_name if cn_name else symbol}",
+        f"美股代码: {symbol}",
+        f"财报季度: {item.get('quarter', '-')}",
+        f"发布时段: {timing if timing else '未指定'}",
+        f"预估 EPS: {item.get('epsEstimate') if item.get('epsEstimate') is not None else '-'}",
+        f"预估营收: {fmt_number(item.get('revenueEstimate'))}",
+        f"数据来源: {source_label}",
     ])
     return [
         "BEGIN:VEVENT",
@@ -288,13 +363,13 @@ def to_cn_event_lines(item: dict, dtstamp: str) -> list[str]:
     end_date = event_date + timedelta(days=1)
     uid = f"CN-{symbol}-{event_date.isoformat()}@earning-calendar-ics"
     report_type = item.get("report_type", "财报")
-    summary = f"{name} {report_type}"
+    summary = f"{name} ({symbol}) {report_type}"
     description = "\n".join([
         f"股票代码: {symbol}",
         f"股票简称: {name}",
         f"报告类型: {report_type}",
         f"披露日期: {event_date.isoformat()}",
-        "Source: AKShare (东方财富)",
+        f"数据来源: AKShare (东方财富)",
     ])
     return [
         "BEGIN:VEVENT",
@@ -353,14 +428,16 @@ def build_index_html(records: list[dict]) -> str:
             market = "A股"
             badge = "cn"
         else:
-            name = r.get("symbol", "")
-            symbol = r.get("symbol", "")
+            symbol = r.get("symbol", "").upper()
+            cn_name = US_NAMES.get(symbol, "")
+            name = cn_name if cn_name else symbol
+            
             report = f"Q{r.get('quarter', '-')}" if r.get("quarter") else "Earnings"
             hour = r.get("hour", "")
             timing = {"bmo": "盘前", "amc": "盘后"}.get(hour, "")
             eps = r.get("epsEstimate") if r.get("epsEstimate") is not None else "-"
             rev = fmt_number(r.get("revenueEstimate"))
-            market = "US"
+            market = "美股"
             badge = "us"
 
         rows.append(f"""
