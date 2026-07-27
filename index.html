@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earnings Calendar · 财报日历</title>
+<meta name="description" content="自动更新的美股 + A股财报日历">
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2e3a;
+    --text: #e6e8ef;
+    --muted: #8b90a0;
+    --accent: #3b82f6;
+    --us: #22c55e;
+    --cn: #f59e0b;
+    --hover: #252836;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+  header {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+    gap: 1rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 1.6rem; font-weight: 700; }
+  .meta { color: var(--muted); font-size: 0.9rem; }
+  .stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.6rem 1rem; font-size: 0.9rem;
+  }
+  .stat strong { color: var(--accent); }
+  .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1.2rem 0; }
+  a.btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--accent); color: white; text-decoration: none;
+    padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+    transition: opacity 0.15s;
+  }
+  a.btn:hover { opacity: 0.9; }
+  a.btn.secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+  .filters {
+    display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;
+  }
+  .filter-btn {
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    padding: 0.35rem 0.85rem; border-radius: 20px; cursor: pointer; font-size: 0.85rem;
+  }
+  .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .table-wrap {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th {
+    text-align: left; padding: 0.85rem 1rem; background: #151820;
+    color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;
+    letter-spacing: 0.03em; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--hover); }
+  .badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700;
+    padding: 0.15rem 0.45rem; border-radius: 4px; margin-right: 0.4rem; vertical-align: middle;
+  }
+  .badge.us { background: rgba(34,197,94,0.15); color: var(--us); }
+  .badge.cn { background: rgba(245,158,11,0.15); color: var(--cn); }
+  .symbol { color: var(--muted); font-size: 0.85rem; margin-left: 0.3rem; }
+  .num { font-variant-numeric: tabular-nums; font-family: ui-monospace, monospace; }
+  .date { font-weight: 600; white-space: nowrap; }
+  footer {
+    margin-top: 2rem; text-align: center; color: var(--muted); font-size: 0.85rem;
+  }
+  @media (max-width: 700px) {
+    th:nth-child(4), td:nth-child(4),
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(6), td:nth-child(6) { display: none; }
+    h1 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>📅 Earnings Calendar</h1>
+        <div class="meta">美股 + A股财报日历 · 自动更新</div>
+      </div>
+      <div class="stats">
+        <div class="stat">总计 <strong>42</strong> 事件</div>
+        <div class="stat">美股 <strong>42</strong></div>
+        <div class="stat">A股 <strong>0</strong></div>
+      </div>
+    </header>
+
+    <div class="actions">
+      <a class="btn" href="earnings_calendar.ics" download>⬇️ 下载 .ics</a>
+      <a class="btn secondary" href="webcal://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics">📱 订阅到日历</a>
+      <a class="btn secondary" href="https://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics" target="_blank">🔗 原始 .ics 链接</a>
+    </div>
+
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">全部</button>
+      <button class="filter-btn" data-filter="us">美股</button>
+      <button class="filter-btn" data-filter="cn">A股</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>公司</th>
+            <th>类型</th>
+            <th>时段</th>
+            <th>EPS 预估</th>
+            <th>营收预估</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          
+        <tr class="event-row" data-market="us" data-date="2026-07-22">
+            <td class="date">2026-07-22</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>GOOG</strong>
+                <span class="symbol">GOOG</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">3.01245</td>
+            <td class="num">127.04 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-22">
+            <td class="date">2026-07-22</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>GOOGL</strong>
+                <span class="symbol">GOOGL</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">2.9798</td>
+            <td class="num">120.43 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-22">
+            <td class="date">2026-07-22</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>TXN</strong>
+                <span class="symbol">TXN</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">1.9543</td>
+            <td class="num">5.30 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-23">
+            <td class="date">2026-07-23</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>INTC</strong>
+                <span class="symbol">INTC</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">0.2177</td>
+            <td class="num">14.71 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-29">
+            <td class="date">2026-07-29</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>ARM</strong>
+                <span class="symbol">ARM</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.40192</td>
+            <td class="num">1.26 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-29">
+            <td class="date">2026-07-29</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>META</strong>
+                <span class="symbol">META</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">7.388</td>
+            <td class="num">60.26 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-29">
+            <td class="date">2026-07-29</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>MSFT</strong>
+                <span class="symbol">MSFT</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">4.23972</td>
+            <td class="num">87.67 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-29">
+            <td class="date">2026-07-29</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>QCOM</strong>
+                <span class="symbol">QCOM</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">2.227</td>
+            <td class="num">9.67 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-30">
+            <td class="date">2026-07-30</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AAPL</strong>
+                <span class="symbol">AAPL</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">1.89396</td>
+            <td class="num">108.89 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-30">
+            <td class="date">2026-07-30</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AMZN</strong>
+                <span class="symbol">AMZN</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">1.81497</td>
+            <td class="num">196.18 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-30">
+            <td class="date">2026-07-30</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AXTI</strong>
+                <span class="symbol">AXTI</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.072</td>
+            <td class="num">34 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-30">
+            <td class="date">2026-07-30</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>COIN</strong>
+                <span class="symbol">COIN</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">-0.00202</td>
+            <td class="num">1.29 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-07-30">
+            <td class="date">2026-07-30</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>MSTR</strong>
+                <span class="symbol">MSTR</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">-</td>
+            <td class="num">124 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-03">
+            <td class="date">2026-08-03</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>PLTR</strong>
+                <span class="symbol">PLTR</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.34665</td>
+            <td class="num">1.81 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-04">
+            <td class="date">2026-08-04</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AMD</strong>
+                <span class="symbol">AMD</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">1.6087</td>
+            <td class="num">11.30 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-04">
+            <td class="date">2026-08-04</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>TSEM</strong>
+                <span class="symbol">TSEM</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.758</td>
+            <td class="num">455 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-05">
+            <td class="date">2026-08-05</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>SHOP</strong>
+                <span class="symbol">SHOP</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.3998</td>
+            <td class="num">3.44 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-05">
+            <td class="date">2026-08-05</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>SNDK</strong>
+                <span class="symbol">SNDK</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">34.515</td>
+            <td class="num">8.39 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-06">
+            <td class="date">2026-08-06</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AAOI</strong>
+                <span class="symbol">AAOI</span>
+            </td>
+            <td>Q2</td>
+            <td>-</td>
+            <td class="num">0.0153</td>
+            <td class="num">194 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-06">
+            <td class="date">2026-08-06</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>DDOG</strong>
+                <span class="symbol">DDOG</span>
+            </td>
+            <td>Q2</td>
+            <td>盘前</td>
+            <td class="num">0.6019</td>
+            <td class="num">1.10 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-06">
+            <td class="date">2026-08-06</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>NET</strong>
+                <span class="symbol">NET</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">0.2724</td>
+            <td class="num">672 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-11">
+            <td class="date">2026-08-11</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>LITE</strong>
+                <span class="symbol">LITE</span>
+            </td>
+            <td>Q4</td>
+            <td>盘后</td>
+            <td class="num">3.0247</td>
+            <td class="num">1.01 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-12">
+            <td class="date">2026-08-12</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>COHR</strong>
+                <span class="symbol">COHR</span>
+            </td>
+            <td>Q4</td>
+            <td>盘后</td>
+            <td class="num">1.6474</td>
+            <td class="num">2.03 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-13">
+            <td class="date">2026-08-13</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AMAT</strong>
+                <span class="symbol">AMAT</span>
+            </td>
+            <td>Q3</td>
+            <td>盘后</td>
+            <td class="num">3.462</td>
+            <td class="num">9.17 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-18">
+            <td class="date">2026-08-18</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>CRWV</strong>
+                <span class="symbol">CRWV</span>
+            </td>
+            <td>Q2</td>
+            <td>-</td>
+            <td class="num">-1.1344</td>
+            <td class="num">2.62 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-19">
+            <td class="date">2026-08-19</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>ADI</strong>
+                <span class="symbol">ADI</span>
+            </td>
+            <td>Q3</td>
+            <td>盘前</td>
+            <td class="num">3.3703</td>
+            <td class="num">3.96 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-19">
+            <td class="date">2026-08-19</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>CSCO</strong>
+                <span class="symbol">CSCO</span>
+            </td>
+            <td>Q4</td>
+            <td>盘后</td>
+            <td class="num">1.1937</td>
+            <td class="num">17.16 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-20">
+            <td class="date">2026-08-20</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>MRVL</strong>
+                <span class="symbol">MRVL</span>
+            </td>
+            <td>Q2</td>
+            <td>-</td>
+            <td class="num">0.939</td>
+            <td class="num">2.76 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-24">
+            <td class="date">2026-08-24</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>OKTA</strong>
+                <span class="symbol">OKTA</span>
+            </td>
+            <td>Q2</td>
+            <td>-</td>
+            <td class="num">0.9841</td>
+            <td class="num">809 M</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-25">
+            <td class="date">2026-08-25</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>CRWD</strong>
+                <span class="symbol">CRWD</span>
+            </td>
+            <td>Q2</td>
+            <td>-</td>
+            <td class="num">0.2985</td>
+            <td class="num">1.47 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-25">
+            <td class="date">2026-08-25</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>SNOW</strong>
+                <span class="symbol">SNOW</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">0.455</td>
+            <td class="num">1.51 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-08-26">
+            <td class="date">2026-08-26</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>NVDA</strong>
+                <span class="symbol">NVDA</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">2.1269</td>
+            <td class="num">93.59 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-09-01">
+            <td class="date">2026-09-01</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>CRM</strong>
+                <span class="symbol">CRM</span>
+            </td>
+            <td>Q2</td>
+            <td>盘后</td>
+            <td class="num">3.3057</td>
+            <td class="num">11.43 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-09-02">
+            <td class="date">2026-09-02</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>AVGO</strong>
+                <span class="symbol">AVGO</span>
+            </td>
+            <td>Q3</td>
+            <td>盘后</td>
+            <td class="num">3.3012</td>
+            <td class="num">29.94 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-09-07">
+            <td class="date">2026-09-07</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>ORCL</strong>
+                <span class="symbol">ORCL</span>
+            </td>
+            <td>Q1</td>
+            <td>-</td>
+            <td class="num">1.7739</td>
+            <td class="num">19.52 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-09-10">
+            <td class="date">2026-09-10</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>ADBE</strong>
+                <span class="symbol">ADBE</span>
+            </td>
+            <td>Q3</td>
+            <td>盘后</td>
+            <td class="num">6.1868</td>
+            <td class="num">6.83 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-09-21">
+            <td class="date">2026-09-21</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>MU</strong>
+                <span class="symbol">MU</span>
+            </td>
+            <td>Q4</td>
+            <td>盘后</td>
+            <td class="num">32.2476</td>
+            <td class="num">52.14 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-10-15">
+            <td class="date">2026-10-15</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>TSM</strong>
+                <span class="symbol">TSM</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">4.49778</td>
+            <td class="num">1446.81 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-10-19">
+            <td class="date">2026-10-19</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>TXN</strong>
+                <span class="symbol">TXN</span>
+            </td>
+            <td>Q3</td>
+            <td>盘后</td>
+            <td class="num">2.1613</td>
+            <td class="num">5.61 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-10-20">
+            <td class="date">2026-10-20</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>LRCX</strong>
+                <span class="symbol">LRCX</span>
+            </td>
+            <td>Q1</td>
+            <td>-</td>
+            <td class="num">1.8266</td>
+            <td class="num">7.15 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-10-21">
+            <td class="date">2026-10-21</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>INTC</strong>
+                <span class="symbol">INTC</span>
+            </td>
+            <td>Q3</td>
+            <td>盘后</td>
+            <td class="num">0.2659</td>
+            <td class="num">15.32 B</td>
+        </tr>
+
+        <tr class="event-row" data-market="us" data-date="2026-10-22">
+            <td class="date">2026-10-22</td>
+            <td>
+                <span class="badge us">US</span>
+                <strong>NOK</strong>
+                <span class="symbol">NOK</span>
+            </td>
+            <td>Earnings</td>
+            <td>-</td>
+            <td class="num">0.07447</td>
+            <td class="num">5.05 B</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      最后更新：2026-07-27 12:35 UTC<br>
+      数据来源：Finnhub / yfinance / AKShare · 仅供参考
+    </footer>
+  </div>
+
+<script>
+  const btns = document.querySelectorAll('.filter-btn');
+  const rows = document.querySelectorAll('.event-row');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const f = btn.dataset.filter;
+      rows.forEach(row => {
+        row.style.display = (f === 'all' || row.dataset.market === f) ? '' : 'none';
+      });
+    });
+  });
+</script>
+</body>
+</html>
