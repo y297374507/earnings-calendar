@@ -7,6 +7,7 @@ Generate earnings-calendar ICS + a beautiful index.html
 
 import os
 import sys
+import contextlib
 from datetime import date, timedelta, datetime, timezone
 from pathlib import Path
 import pandas as pd
@@ -24,11 +25,11 @@ TODAY = date.today()
 FROM = (TODAY - timedelta(days=LOOKBEHIND_DAYS)).isoformat()
 TO = (TODAY + timedelta(days=LOOKAHEAD_DAYS)).isoformat()
 
-# 你的仓库固定链接（已写死，方便直接用）
 RAW_ICS_URL = "https://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics"
 WEBCAL_URL = "webcal://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics"
 
 def get_cn_periods() -> list[str]:
+    """获取合法标准的 AKShare 报表 period 格式字符串"""
     year = TODAY.year
     month = TODAY.month
     periods = []
@@ -36,12 +37,12 @@ def get_cn_periods() -> list[str]:
         periods.append(f"{year - 1}年报")
         periods.append(f"{year}一季")
     elif month <= 8:
-        periods.append(f"{year}中报")      # ← 关键！现在该看中报
         periods.append(f"{year}一季")
+        periods.append(f"{year}半年报")
         periods.append(f"{year - 1}年报")
     elif month <= 10:
         periods.append(f"{year}三季")
-        periods.append(f"{year}中报")
+        periods.append(f"{year}半年报")
     else:
         periods.append(f"{year}三季")
         periods.append(f"{year}年报")
@@ -68,8 +69,10 @@ def load_watchlist_cn() -> set[str]:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#"):
-                code = line.replace("sh", "").replace("sz", "").replace("bj", "")
-                symbols.add(code)
+                code = line.lower().replace("sh", "").replace("sz", "").replace("bj", "").strip()
+                # 确保填充补全为 6 位数字代码
+                if code.isdigit():
+                    symbols.add(code.zfill(6))
     return symbols
 
 def fmt_number(num):
@@ -123,25 +126,27 @@ def fetch_yfinance_earnings(watchlist: set[str], existing_symbols: set[str]) -> 
     print(f"\n 🐍 yfinance fallback for {len(missing)} tickers…")
     for i, symbol in enumerate(sorted(missing), 1):
         try:
-            ticker = yf.Ticker(symbol)
-            cal = ticker.calendar
+            # 屏蔽 yfinance 打印在 stderr 的 404 错误
+            with contextlib.redirect_stderr(None):
+                ticker = yf.Ticker(symbol)
+                cal = ticker.calendar
         except Exception as e:
-            print(f" [!] {symbol}: {e}")
-            _time.sleep(0.5)
+            print(f" [{i}/{len(missing)}] {symbol}: {e}")
+            _time.sleep(0.3)
             continue
         if not cal:
-            print(f" [!] {symbol}: empty calendar data")
-            _time.sleep(0.5)
+            print(f" [{i}/{len(missing)}] {symbol}: empty calendar data")
+            _time.sleep(0.3)
             continue
         raw_dates = cal.get("Earnings Date")
         if not raw_dates:
-            _time.sleep(0.5)
+            _time.sleep(0.3)
             continue
         event_date = raw_dates[0]
         if isinstance(event_date, datetime):
             event_date = event_date.date()
         if not (from_date <= event_date <= to_date):
-            _time.sleep(0.5)
+            _time.sleep(0.3)
             continue
         records.append({
             "symbol": symbol,
@@ -153,7 +158,7 @@ def fetch_yfinance_earnings(watchlist: set[str], existing_symbols: set[str]) -> 
             "source": "yf",
         })
         print(f" [{i}/{len(missing)}] {symbol}: {event_date}")
-        _time.sleep(0.5)
+        _time.sleep(0.3)
     print(f" 🐍 yfinance found {len(records)} tickers")
     return records
 
@@ -166,37 +171,46 @@ def fetch_cn_earnings(watchlist_cn: set[str]) -> list[dict]:
     except ImportError:
         print(" ⚠️ AKShare not installed, skipping A-share data")
         return []
+        
     periods = get_cn_periods()
     all_records = []
     for period in periods:
         try:
             print(f" 🇨🇳 获取 {period} 财报披露时间...")
             df = ak.stock_report_disclosure(market="沪深京", period=period)
+            if df.empty:
+                continue
+                
+            # 格式化数据框列名与股票代码，确保强匹配
+            df["股票代码"] = df["股票代码"].astype(str).str.zfill(6)
             df_filtered = df[df["股票代码"].isin(watchlist_cn)]
+            
             for _, row in df_filtered.iterrows():
                 disclosure_date = row.get("实际披露")
-                if pd.isna(disclosure_date):
+                if pd.isna(disclosure_date) or str(disclosure_date).strip() in ("", "None", "-"):
                     disclosure_date = row.get("首次预约")
-                if pd.isna(disclosure_date):
+                if pd.isna(disclosure_date) or str(disclosure_date).strip() in ("", "None", "-"):
                     continue
+                    
                 if isinstance(disclosure_date, date):
                     event_date = disclosure_date
                 else:
                     try:
                         event_date = pd.to_datetime(disclosure_date).date()
-                    except:
+                    except Exception:
                         continue
-                event_date = event_date - timedelta(days=1)  # A股通常前一晚发布
+                        
+                event_date = event_date - timedelta(days=1)  # A股盘前/前晚公布
                 from_date = TODAY - timedelta(days=LOOKBEHIND_DAYS)
                 to_date = TODAY + timedelta(days=LOOKAHEAD_DAYS)
+                
                 if event_date < from_date or event_date > to_date:
                     continue
-                report_type = period.replace("年", "年").replace("季", "季报")
-                if "报" not in report_type:
-                    report_type += "报"
+                    
+                report_type = period
                 record = {
                     "symbol": row["股票代码"],
-                    "name": row["股票简称"],
+                    "name": row.get("股票简称", row["股票代码"]),
                     "date": event_date.isoformat(),
                     "period": period,
                     "report_type": report_type,
@@ -206,7 +220,17 @@ def fetch_cn_earnings(watchlist_cn: set[str]) -> list[dict]:
             print(f" {period}: {len(df_filtered)} 条匹配")
         except Exception as e:
             print(f" {period}: 错误 - {e}")
-    return all_records
+            
+    # 去重
+    seen = set()
+    unique_cn_records = []
+    for r in all_records:
+        key = (r["symbol"], r["date"])
+        if key not in seen:
+            seen.add(key)
+            unique_cn_records.append(r)
+            
+    return unique_cn_records
 
 def escape_ics_text(value: str) -> str:
     return (
@@ -544,7 +568,7 @@ def main() -> None:
     with open("earnings_calendar.ics", "w", encoding="utf-8") as f:
         f.write(build_calendar(all_records))
 
-    # 输出 Index.html（重点！）
+    # 输出 Index.html
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(build_index_html(all_records))
 
