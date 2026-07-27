@@ -29,23 +29,17 @@ RAW_ICS_URL = "https://raw.githubusercontent.com/y297374507/earnings-calendar/ma
 WEBCAL_URL = "webcal://raw.githubusercontent.com/y297374507/earnings-calendar/main/earnings_calendar.ics"
 
 def get_cn_periods() -> list[str]:
-    """返回当前应该关注的报告期（尽量覆盖即将披露的）"""
     year = TODAY.year
     month = TODAY.month
     periods = []
-
     if month <= 4:
-        # 年报 + 一季报
         periods.append(f"{year - 1}年报")
         periods.append(f"{year}一季")
     elif month <= 8:
-        # 重点：中报（半年报）是现在最主要的
-        periods.append(f"{year}中报")
-        periods.append(f"{year}一季")      # 个别迟到的一季报
-        periods.append(f"{year - 1}年报")  # 极少数还没发的年报
+        periods.append(f"{year}一季")
+        periods.append(f"{year - 1}年报")
     elif month <= 10:
         periods.append(f"{year}三季")
-        periods.append(f"{year}中报")
     else:
         periods.append(f"{year}三季")
         periods.append(f"{year}年报")
@@ -170,46 +164,34 @@ def fetch_cn_earnings(watchlist_cn: set[str]) -> list[dict]:
     except ImportError:
         print(" ⚠️ AKShare not installed, skipping A-share data")
         return []
-
     periods = get_cn_periods()
     all_records = []
-
-    # A股放宽窗口：过去 45 天 + 未来 90 天
-    from_date = TODAY - timedelta(days=45)
-    to_date = TODAY + timedelta(days=LOOKAHEAD_DAYS)
-
     for period in periods:
         try:
             print(f" 🇨🇳 获取 {period} 财报披露时间...")
             df = ak.stock_report_disclosure(market="沪深京", period=period)
             df_filtered = df[df["股票代码"].isin(watchlist_cn)]
-
             for _, row in df_filtered.iterrows():
                 disclosure_date = row.get("实际披露")
                 if pd.isna(disclosure_date):
                     disclosure_date = row.get("首次预约")
                 if pd.isna(disclosure_date):
                     continue
-
                 if isinstance(disclosure_date, date):
                     event_date = disclosure_date
                 else:
                     try:
                         event_date = pd.to_datetime(disclosure_date).date()
-                    except Exception:
+                    except:
                         continue
-
-                # A股通常前一晚发布，日历记前一天
-                event_date = event_date - timedelta(days=1)
-
+                event_date = event_date - timedelta(days=1)  # A股通常前一晚发布
+                from_date = TODAY - timedelta(days=LOOKBEHIND_DAYS)
+                to_date = TODAY + timedelta(days=LOOKAHEAD_DAYS)
                 if event_date < from_date or event_date > to_date:
                     continue
-
-                # 更干净的报告类型
-                report_type = period
+                report_type = period.replace("年", "年").replace("季", "季报")
                 if "报" not in report_type:
                     report_type += "报"
-
                 record = {
                     "symbol": row["股票代码"],
                     "name": row["股票简称"],
@@ -219,11 +201,9 @@ def fetch_cn_earnings(watchlist_cn: set[str]) -> list[dict]:
                     "source": "cn",
                 }
                 all_records.append(record)
-
             print(f" {period}: {len(df_filtered)} 条匹配")
         except Exception as e:
             print(f" {period}: 错误 - {e}")
-
     return all_records
 
 def escape_ics_text(value: str) -> str:
