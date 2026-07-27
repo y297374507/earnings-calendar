@@ -1,44 +1,41 @@
 name: Update Earnings Calendar
 
 permissions:
-  contents: write  # allow GITHUB_TOKEN to commit & push
+  contents: write
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # 10:00 Beijing Time
-    - cron: '0 14 * * *'  # 22:00 Beijing Time
-  workflow_dispatch:      # allow manual trigger
-
+    - cron: '0 2 * * *'   # 10:00 北京时间
+    - cron: '0 14 * * *'  # 22:00 北京时间
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: 🔧 Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           cache: 'pip'
 
       - name: 📦 Install deps
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: 🚀 Generate ICS
+      - name: 🚀 Generate ICS + Index.html
         env:
           FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
-        run: |
-          python scripts/generate_calendar.py
+        run: python scripts/generate_calendar.py
 
       - name: 📤 Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [[ `git status --porcelain` ]]; then
-            git add earnings_calendar.ics
-            git commit -m "chore: refresh earnings calendar [skip ci]"
+            git add earnings_calendar.ics index.html
+            git commit -m "chore: refresh earnings calendar + index [skip ci]"
             git push
           fi
