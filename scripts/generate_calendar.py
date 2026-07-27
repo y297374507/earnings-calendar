@@ -36,10 +36,12 @@ def get_cn_periods() -> list[str]:
         periods.append(f"{year - 1}年报")
         periods.append(f"{year}一季")
     elif month <= 8:
+        periods.append(f"{year}中报")      # ← 关键！现在该看中报
         periods.append(f"{year}一季")
         periods.append(f"{year - 1}年报")
     elif month <= 10:
         periods.append(f"{year}三季")
+        periods.append(f"{year}中报")
     else:
         periods.append(f"{year}三季")
         periods.append(f"{year}年报")
