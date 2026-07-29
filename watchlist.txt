@@ -1,60 +1,108 @@
-# 股票代码关注列表
-# 每行一个代码，支持注释（以 # 开头的行会被忽略）
-# 示例：
-# AAPL
-# MSFT
-# 记得每次修改后，让claude code更新到github上
+# AI算力/GPU
+NVDA # 英伟达 AI算力/GPU
+AMD # 超微 AI算力/GPU
+AVGO # 博通 AI算力/GPU
+MRVL # 迈威尔 AI算力/GPU
+ARM # 安谋 AI算力/GPU
 
-# === 科技巨头 ===
-AAPL
-MSFT
-GOOGL
-GOOG
-AMZN
-META
-NVDA
-AAOI
-LITE
-COHR
-CRWV
+# 存储芯片 (HBM/DRAM/NAND)
+MU # 美光 存储芯片
+SKHY # 海力士 存储芯片
+WDC # 西部数据 存储芯片
+STX # 希捷 存储芯片
+SNDK # 闪迪 存储芯片
 
+# 半导体设备/材料
+ASML # 阿斯麦 半导体设备
+LRCX # 泛林集团 半导体设备
+AMAT # 应用材料 半导体设备
+KLAC # 科磊 半导体设备
+TER # 泰瑞达 半导体设备
+ENTG # 英特格 半导体材料
+GLW # 康宁 半导体材料/光通信
 
-# === 半导体 ===
-TSM
-AMD
-AVGO
-QCOM
-ARM
-INTC
-MU
-SNDK
-AXTI
-TXN
-ADI
-TSEM
-MRVL
+# 晶圆代工/封测
+TSM # 台积电 晶圆代工
+INTC # 英特尔 晶圆代工
+UMC # 联电 晶圆代工
+ASX # 日月光 封装测试
 
-# === 半导体设备 ===
-AMAT
-LRCX
-BESI
+# 光模块/数据中心互联
+COHR # 高意 光模块
+ALAB # Astera Labs 数据中心互联
+CRDO # Credo 数据中心互联
+ANET # Arista Networks 数据中心互联
 
+# 数据中心基础设施 (液冷/冷却)
+VRT # Vertiv 液冷/冷却系统
 
-# === 软件/SaaS ===
-CRM
-ORCL
-OKTA
-SNOW
-PLTR
-CRWD
-DDOG
-NET
+# PCB/基板
+TTM # TTM Technologies PCB/基板
+3189.TW # 景硕 PCB/基板
 
+# 云计算/软件巨头
+MSFT # 微软 云计算/软件
+GOOGL # 谷歌 云计算/软件
+AMZN # 亚马逊 云计算/软件
+ORCL # 甲骨文 云计算/软件
+CRM # Salesforce 云计算/软件
+PLTR # Palantir 云计算/软件
 
-# === 其他科技 ===
-ADBE
-SHOP
-COIN
-MSTR
-CSCO
-NOK
+# 消费电子/终端品牌
+AAPL # 苹果 消费电子
+QCOM # 高通 消费电子
+
+# 人形机器人产业链
+TSLA # 特斯拉 人形机器人
+TER # 泰瑞达 人形机器人
+ROK # 罗克韦尔自动化 人形机器人
+SYM # Symbotic 人形机器人
+ISRG # 直觉外科 手术机器人
+
+# 电动车/自动驾驶
+TSLA # 特斯拉 电动车/自动驾驶
+RIVN # Rivian 电动车
+GM # 通用汽车 电动车/自动驾驶
+
+# 商业航天题材
+RKLB # Rocket Lab 商业航天
+ASTS # AST SpaceMobile 商业航天
+IRDM # 铱星通信 商业航天
+SPCE # Virgin Galactic 商业航天
+BKSY # BlackSky 商业航天
+
+# 量子计算
+IONQ # IonQ 量子计算
+RGTI # Rigetti 量子计算
+QBTS # D-Wave 量子计算
+IBM # IBM 量子计算
+
+# 核能/核聚变
+OKLO # Oklo 核能/核聚变
+SMR # NuScale 核能/核聚变
+CCJ # 卡梅科 核能/铀矿
+LEU # Centrus Energy 核能
+
+# 稀土/战略材料
+MP # MP Materials 稀土
+ALB # 雅保 锂矿
+FCX # 自由港迈克墨伦 铜矿
+
+# 国防军工
+LMT # 洛克希德马丁 国防军工
+RTX # 雷神 国防军工
+NOC # 诺斯罗普格鲁曼 国防军工
+
+# 金融风向标
+JPM # 摩根大通 金融风向标
+GS # 高盛 金融风向标
+BRK.B # 伯克希尔哈撒韦 金融风向标
+
+# 能源
+XOM # 埃克森美孚 能源
+CVX # 雪佛龙 能源
+
+# 生物科技/创新药
+LLY # 礼来 生物科技
+UNH # 联合健康 生物科技
+MRNA # Moderna 生物科技
