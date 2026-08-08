@@ -28,6 +28,7 @@ jobs:
       - name: 🚀 Generate ICS + Index.html
         env:
           FINNHUB_TOKEN: ${{ secrets.FINNHUB_TOKEN }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}   # 👈 增加这一行
         run: python scripts/generate_calendar.py
 
       - name: 📤 Commit & push if changed
