@@ -615,7 +615,7 @@ def build_index_html(records: list[dict]) -> str:
 </html>"""
 
 def send_wecom_notification(records: list[dict]) -> None:
-    """过滤未来7天（包含今天）的财报，并推送至企业微信群机器人"""
+    """过滤未来7天（包含今天）的财报，并推送优化格式后的企业微信群消息"""
     if not WECOM_WEBHOOK:
         print("⚠️ WECOM_WEBHOOK 未配置，跳过企微推送")
         return
@@ -623,7 +623,7 @@ def send_wecom_notification(records: list[dict]) -> None:
     # 过滤未来7天 (TODAY ~ TODAY + 6 days)
     end_date = TODAY + timedelta(days=6)
     upcoming_records = []
-    
+
     for r in records:
         if not r.get("date"):
             continue
@@ -637,29 +637,45 @@ def send_wecom_notification(records: list[dict]) -> None:
     # 按日期排序
     upcoming_records.sort(key=lambda x: (x[0], x[1].get("symbol", "")))
 
+    # 统计美股与 A 股数量
+    us_count = sum(1 for _, r in upcoming_records if r.get("source") != "cn")
+    cn_count = sum(1 for _, r in upcoming_records if r.get("source") == "cn")
+
+    # 1. 头部标题与统计卡片 (去掉了年份，格式为 MM-DD)
+    date_range_str = f"{TODAY.strftime('%m-%d')} ~ {end_date.strftime('%m-%d')}"
     lines = [
-        f"### 📅 未来 7 天财报发布提醒",
-        f"> 统计区间：`{TODAY.isoformat()}` ~ `{end_date.isoformat()}`",
+        "## 📢 未来 7 天财报发布提醒",
+        f"> 📅 **周期统计**: `<font color=\"comment\">{date_range_str}</font>`",
+        f"> 📊 **发布总数**: **{len(upcoming_records)}** 场 (<font color=\"info\">美股 {us_count}</font> | <font color=\"warning\">A股 {cn_count}</font>)",
         ""
     ]
 
     if not upcoming_records:
-        lines.append("未来 7 天暂无自选股财报发布计划。")
+        lines.append("✨ *未来 7 天自选股无财报发布计划，享受市场平静吧！*")
     else:
+        current_date = None
         for r_date, r in upcoming_records:
+            # 2. 按日期进行分组展现 (只保留 MM-DD 星期X，去掉了重复年份)
+            if r_date != current_date:
+                current_date = r_date
+                # 针对今天加上特别标签
+                today_tag = " <font color=\"info\">[Today]</font>" if r_date == TODAY else ""
+                lines.append(f"\n🗓️ **{r_date.strftime('%m-%d %a')}**{today_tag}")
+
+            # 3. 区分 A 股与美股显示
             if r.get("source") == "cn":
                 symbol = r.get("symbol", "")
                 name = r.get("name", "")
                 report = r.get("report_type", "财报")
-                lines.append(f"- **{r_date.isoformat()}** | <font color=\"warning\">[A股]</font> **{name}** (`{symbol}`) - {report}")
+                lines.append(f"  • <font color=\"warning\">[A股]</font> **{name}** (`{symbol}`) 📋 `{report}`")
             else:
                 symbol = r.get("symbol", "").upper()
                 cn_name = US_NAMES.get(symbol, "")
                 display_name = f"{cn_name}({symbol})" if cn_name else symbol
                 hour = r.get("hour", "")
-                timing = {"bmo": "盘前", "amc": "盘后"}.get(hour, "未指定")
+                timing = {"bmo": "🌅 盘前", "amc": "🌙 盘后"}.get(hour, "⏱️ 未指定")
                 report = f"Q{r.get('quarter')}" if r.get('quarter') else "财报"
-                lines.append(f"- **{r_date.isoformat()}** | <font color=\"info\">[美股]</font> **{display_name}** - {report} ({timing})")
+                lines.append(f"  • <font color=\"info\">[美股]</font> **{display_name}** 📈 `{report}` ｜ {timing}")
 
     content = "\n".join(lines)
     payload = {
