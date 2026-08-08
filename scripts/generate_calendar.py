@@ -3,6 +3,7 @@
 Generate earnings-calendar ICS + a beautiful index.html
 - US stocks via Finnhub (+ yfinance fallback) with Chinese Name support
 - A-shares via AKShare
+- Send WeCom notification for upcoming 7 days earnings
 """
 
 import os
@@ -17,6 +18,7 @@ import requests
 # Config
 API = "https://finnhub.io/api/v1/calendar/earnings"
 TOKEN = os.getenv("FINNHUB_TOKEN")
+WECOM_WEBHOOK = os.getenv("WECOM_WEBHOOK")  # 企业微信 Webhook 地址
 WATCHLIST_FILE = Path(__file__).parent.parent / "watchlist.txt"
 WATCHLIST_CN_FILE = Path(__file__).parent.parent / "watchlist_cn.txt"
 LOOKBEHIND_DAYS = 15
@@ -612,6 +614,68 @@ def build_index_html(records: list[dict]) -> str:
 </body>
 </html>"""
 
+def send_wecom_notification(records: list[dict]) -> None:
+    """过滤未来7天（包含今天）的财报，并推送至企业微信群机器人"""
+    if not WECOM_WEBHOOK:
+        print("⚠️ WECOM_WEBHOOK 未配置，跳过企微推送")
+        return
+
+    # 过滤未来7天 (TODAY ~ TODAY + 6 days)
+    end_date = TODAY + timedelta(days=6)
+    upcoming_records = []
+    
+    for r in records:
+        if not r.get("date"):
+            continue
+        try:
+            r_date = date.fromisoformat(r["date"])
+            if TODAY <= r_date <= end_date:
+                upcoming_records.append((r_date, r))
+        except ValueError:
+            continue
+
+    # 按日期排序
+    upcoming_records.sort(key=lambda x: (x[0], x[1].get("symbol", "")))
+
+    lines = [
+        f"### 📅 未来 7 天财报发布提醒",
+        f"> 统计区间：`{TODAY.isoformat()}` ~ `{end_date.isoformat()}`",
+        ""
+    ]
+
+    if not upcoming_records:
+        lines.append("未来 7 天暂无自选股财报发布计划。")
+    else:
+        for r_date, r in upcoming_records:
+            if r.get("source") == "cn":
+                symbol = r.get("symbol", "")
+                name = r.get("name", "")
+                report = r.get("report_type", "财报")
+                lines.append(f"- **{r_date.isoformat()}** | <font color=\"warning\">[A股]</font> **{name}** (`{symbol}`) - {report}")
+            else:
+                symbol = r.get("symbol", "").upper()
+                cn_name = US_NAMES.get(symbol, "")
+                display_name = f"{cn_name}({symbol})" if cn_name else symbol
+                hour = r.get("hour", "")
+                timing = {"bmo": "盘前", "amc": "盘后"}.get(hour, "未指定")
+                report = f"Q{r.get('quarter')}" if r.get('quarter') else "财报"
+                lines.append(f"- **{r_date.isoformat()}** | <font color=\"info\">[美股]</font> **{display_name}** - {report} ({timing})")
+
+    content = "\n".join(lines)
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {
+            "content": content
+        }
+    }
+
+    try:
+        resp = requests.post(WECOM_WEBHOOK, json=payload, timeout=10)
+        resp.raise_for_status()
+        print(f"📣 企业微信通知推送成功 ({len(upcoming_records)} 条提醒)")
+    except Exception as e:
+        print(f"💥 企业微信通知推送失败: {e}")
+
 def main() -> None:
     all_records = []
 
@@ -648,6 +712,11 @@ def main() -> None:
     # 输出 Index.html
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(build_index_html(all_records))
+
+    # 推送企业微信通知（未来7天）
+    print()
+    print("📣 检查并发送企业微信通知...")
+    send_wecom_notification(all_records)
 
     us_cnt = len([r for r in all_records if r.get("source") != "cn"])
     cn_cnt = len([r for r in all_records if r.get("source") == "cn"])
