@@ -615,12 +615,11 @@ def build_index_html(records: list[dict]) -> str:
 </html>"""
 
 def send_wecom_notification(records: list[dict]) -> None:
-    """过滤未来7天（包含今天）的财报，并推送优化格式后的企业微信群消息"""
+    """过滤未来7天（含今天）的财报，推送简洁美观、适合手机阅读的企业微信消息"""
     if not WECOM_WEBHOOK:
         print("⚠️ WECOM_WEBHOOK 未配置，跳过企微推送")
         return
-
-    # 过滤未来7天 (TODAY ~ TODAY + 6 days)
+ 
     end_date = TODAY + timedelta(days=6)
     upcoming_records = []
     for r in records:
@@ -632,61 +631,56 @@ def send_wecom_notification(records: list[dict]) -> None:
                 upcoming_records.append((r_date, r))
         except ValueError:
             continue
-
-    # 按日期排序
     upcoming_records.sort(key=lambda x: (x[0], x[1].get("symbol", "")))
-
-    # 统计美股与 A 股数量
+ 
     us_count = sum(1 for _, r in upcoming_records if r.get("source") != "cn")
     cn_count = sum(1 for _, r in upcoming_records if r.get("source") == "cn")
-
-    # 头部
-    date_range_str = f"{TODAY.strftime('%m-%d')} ~ {end_date.strftime('%m-%d')}"
+    date_range_str = f"{TODAY.strftime('%m.%d')} - {end_date.strftime('%m.%d')}"
+ 
+    # 顶部：一行标题 + 一行统计，避免手机上占用过多屏幕高度
     lines = [
-        "## 📅 未来7天财报提醒",
-        f"> {date_range_str} · 共 **{len(upcoming_records)}** 场 "
-        f"(<font color=\"info\">美股 {us_count}</font> · "
-        f"<font color=\"warning\">A股 {cn_count}</font>)",
-        ""
+        f"### 📢 财报提醒 · {date_range_str}",
+        f"共 **{len(upcoming_records)}** 场　🇺🇸 {us_count}　🇨🇳 {cn_count}",
     ]
-
+ 
     if not upcoming_records:
-        lines.append("✨ 未来7天自选股无财报，享受平静吧")
+        lines.append("")
+        lines.append("✨ 未来 7 天自选股暂无财报，市场平静")
     else:
         current_date = None
         for r_date, r in upcoming_records:
-            # 日期分组标题
             if r_date != current_date:
                 current_date = r_date
-                weekday = ["一", "二", "三", "四", "五", "六", "日"][r_date.weekday()]
-                today_tag = " <font color=\"info\">今天</font>" if r_date == TODAY else ""
-                lines.append(f"**{r_date.strftime('%m-%d')} 周{weekday}**{today_tag}")
-
-            # 公司行（尽量短）
+                weekday = "日一二三四五六"[int(r_date.strftime("%w"))]
+                day_label = f"{r_date.strftime('%m.%d')} 周{weekday}"
+                if r_date == TODAY:
+                    day_label += " ·今天"
+                lines.append("")
+                lines.append(f"**{day_label}**")
+ 
             if r.get("source") == "cn":
-                name = r.get("name", "")
                 symbol = r.get("symbol", "")
-                report = r.get("report_type", "财报")
-                lines.append(f"• <font color=\"warning\">A</font> **{name}** `{symbol}` · {report}")
+                name = r.get("name", "")
+                report = r.get("report_type", "财报").replace("年报", "年报").strip()
+                # 精简报告类型标签，如 "2026一季" -> "一季报"
+                report_tag = report[-2:] + "报" if not report.endswith("报") else report
+                lines.append(f"🟡 {name} `{symbol}` · {report_tag}")
             else:
                 symbol = r.get("symbol", "").upper()
                 cn_name = US_NAMES.get(symbol, "")
-                display = f"{cn_name}({symbol})" if cn_name else symbol
+                display_name = f"{cn_name}({symbol})" if cn_name else symbol
                 hour = r.get("hour", "")
-                timing = {"bmo": "盘前", "amc": "盘后"}.get(hour, "")
-                report = f"Q{r.get('quarter')}" if r.get("quarter") else "财报"
-                timing_str = f" · {timing}" if timing else ""
-                lines.append(f"• <font color=\"info\">美</font> **{display}** · {report}{timing_str}")
-
+                timing = {"bmo": "盘前", "amc": "盘后"}.get(hour, "待定")
+                quarter = f"Q{r.get('quarter')}" if r.get("quarter") else "财报"
+                lines.append(f"🟢 {display_name} · {quarter} · {timing}")
+ 
     content = "\n".join(lines)
-
     payload = {
         "msgtype": "markdown",
         "markdown": {
             "content": content
         }
     }
-
     try:
         resp = requests.post(WECOM_WEBHOOK, json=payload, timeout=10)
         resp.raise_for_status()
