@@ -21,7 +21,7 @@ TOKEN = os.getenv("FINNHUB_TOKEN")
 WECOM_WEBHOOK = os.getenv("WECOM_WEBHOOK")  # 企业微信 Webhook 地址
 WATCHLIST_FILE = Path(__file__).parent.parent / "watchlist.txt"
 WATCHLIST_CN_FILE = Path(__file__).parent.parent / "watchlist_cn.txt"
-LOOKBEHIND_DAYS = 15
+LOOKBEHIND_DAYS = 0
 LOOKAHEAD_DAYS = 90
 TODAY = date.today()
 FROM = (TODAY - timedelta(days=LOOKBEHIND_DAYS)).isoformat()
